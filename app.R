@@ -32,7 +32,9 @@ ui <- bslib::page_sidebar(
     ),
     fileInput('xlsxFile', 'Choose xlsx file',
               accept = c(".xlsx")
-              )
+              ),
+    downloadButton(outputId = 'download',
+                   label = "Download the data")
     #datamods::import_file_ui(
     #  "xlsxFile",
     #  title = NULL,
@@ -40,7 +42,6 @@ ui <- bslib::page_sidebar(
     #  file_extensions = c(".xls", ".xlsx")
     #  )
     ),
-
 ## sc panel ----------------------------------------------------------------
 
   bslib::card(
@@ -103,26 +104,45 @@ server <- function(input, output) {
   #)
   
   results_plate <- reactive({
-    res <- importedData() |>
-      head(n = 9) |> 
-      janitor::row_to_names(1) |> 
-      dplyr::mutate(dplyr::across(2:13, as.numeric)) |> 
-      tidyr::pivot_longer(!1, names_to = "Column")
-    
-    dilution <- importedData()[11:19,] |> 
-      janitor::row_to_names(1) |> 
-      dplyr::mutate(dplyr::across(2:13, as.numeric)) |> 
-      tidyr::pivot_longer(!1, names_to = "Column", values_to = "dilution")
-    
-    samples_id <- importedData()[21:29,] |>
-      janitor::row_to_names(1) |> 
-      tidyr::pivot_longer(!1, names_to = "Column", values_to = "sample_id")
-    
+      if (input$wells == "96 wells") {
+      res <- importedData() |>
+        head(n = 9) |> 
+        janitor::row_to_names(1) |> 
+        dplyr::mutate(dplyr::across(2:13, as.numeric)) |> 
+        tidyr::pivot_longer(!1, names_to = "Column")
+      
+      dilution <- importedData()[11:19,] |> 
+        janitor::row_to_names(1) |> 
+        dplyr::mutate(dplyr::across(2:13, as.numeric)) |> 
+        tidyr::pivot_longer(!1, names_to = "Column", values_to = "dilution")
+      
+      samples_id <- importedData()[21:29,] |>
+        janitor::row_to_names(1) |> 
+        tidyr::pivot_longer(!1, names_to = "Column", values_to = "sample_id")
+      } else {
+        res <- importedData() |>
+          head(n = 17) |> 
+          dplyr::select(1:25) |> 
+          janitor::row_to_names(1) |> 
+          dplyr::mutate(dplyr::across(2:25, as.numeric)) |> 
+          tidyr::pivot_longer(!1, names_to = "Column")
+        
+        dilution <- importedData()[19:35,] |> 
+          dplyr::select(1:25) |> 
+          janitor::row_to_names(1) |> 
+          dplyr::mutate(dplyr::across(2:25, as.numeric)) |> 
+          tidyr::pivot_longer(!1, names_to = "Column", values_to = "dilution")
+        
+        samples_id <- importedData()[37:53,] |>
+          dplyr::select(1:25) |> 
+          janitor::row_to_names(1) |> 
+          tidyr::pivot_longer(!1, names_to = "Column", values_to = "sample_id")
+      }
     Final_table <- res |> 
       dplyr::left_join(y = dilution, by = c("Row", "Column")) |> 
       dplyr::left_join(y = samples_id, by = c("Row", "Column")) |> 
       dplyr::mutate(sample_id = tolower(sample_id))
-    
+      
   })
   
 # standard curve ----------------------------------------------------------
@@ -164,6 +184,13 @@ server <- function(input, output) {
   output$sample_plot <- renderPlot({concentrations()$plot})
   
   output$DT_samplesWide <- DT::renderDataTable({concentration_wide()})
+  
+  output$download <- downloadHandler(
+    filename = function(){"Elisa_res.csv"}, 
+    content = function(fname){
+      write.csv(concentration_wide(), fname)
+    }
+  )
 }
 
 # Run the application 
